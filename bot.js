@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 const { MENSAGENS, PERFIS, CONFIG } = require("./config");
-const { gerarResposta } = require("./claude");
+const { gerarRespostaClaude } = require("./claude");
 const { salvarTicket } = require("./sheets");
 
 // ─── Armazenamento de sessões em memória ───────────────────────────────────
