@@ -1,75 +1,61 @@
 // ═══════════════════════════════════════════════════════════════════════
 // MÓDULO: Claude IA
+//Editado devido a erro 400
 // Gera respostas contextualizadas ao Learning Passport
 // ═══════════════════════════════════════════════════════════════════════
-
 const axios = require("axios");
-const { CONTEXTO_IA, FAQ } = require("./config");
 
-// ─── Verificar FAQ local antes de chamar a IA ──────────────────────────────
-// Economiza tokens da API quando a pergunta é comum
-function verificarFAQ(mensagem) {
-  const texto = mensagem.toLowerCase();
-  for (const item of FAQ) {
-    if (item.keywords.length > 0 && item.keywords.some((kw) => texto.includes(kw))) {
-      return item.resposta;
-    }
-  }
-  return null;
-}
-
-// ─── Chamar Claude API ─────────────────────────────────────────────────────
-async function gerarResposta({ perfil, categoria, historico, mensagemAtual }) {
-  // Tenta FAQ primeiro
-  const respostaFAQ = verificarFAQ(mensagemAtual);
-  if (respostaFAQ) {
-    console.log("[Claude] Respondido via FAQ local.");
-    return respostaFAQ;
-  }
-
+async function gerarRespostaClaude({ mensagemAtual, historico = [], contexto = "" }) {
   try {
-    const systemPrompt = `${CONTEXTO_IA}
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error("ANTHROPIC_API_KEY não definida");
+    }
 
-Contexto desta conversa:
-- Perfil do usuário: ${perfil}
-- Categoria da dúvida: ${categoria}
+    if (!mensagemAtual || typeof mensagemAtual !== "string") {
+      throw new Error("mensagemAtual inválida");
+    }
 
-Responda de forma direta e prática. Use formatação simples compatível com WhatsApp (*negrito*, listas com números ou ✔️). Máximo 3 parágrafos.`;
+    const mensagens = historico
+      .filter((m) => m && typeof m.texto === "string" && m.texto.trim())
+      .map((m) => ({
+        role: m.de === "usuario" ? "user" : "assistant",
+        content: m.texto.trim(),
+      }));
 
-    // Monta histórico de mensagens para contexto
-    const mensagens = historico.map((m) => ({
-      role: m.de === "usuario" ? "user" : "assistant",
-      content: m.texto,
-    }));
-    mensagens.push({ role: "user", content: mensagemAtual });
+    mensagens.push({
+      role: "user",
+      content: mensagemAtual.trim(),
+    });
 
     const response = await axios.post(
       "https://api.anthropic.com/v1/messages",
       {
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        system: systemPrompt,
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        system: contexto || "Você é um assistente útil.",
         messages: mensagens,
       },
       {
         headers: {
-          "Content-Type": "application/json",
           "x-api-key": process.env.ANTHROPIC_API_KEY,
           "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
         },
-        timeout: 30000,
       }
     );
 
-    const texto = response.data.content?.[0]?.text;
-    if (!texto) throw new Error("Resposta vazia da API");
+    return response.data?.content?.[0]?.text || null;
 
-    console.log("[Claude] Resposta gerada com sucesso.");
-    return texto;
   } catch (err) {
-    console.error("[Claude] Erro:", err.message);
-    return null; // server.js trata o null com mensagem de erro
+    console.error("====== ERRO CLAUDE ======");
+    console.error("Status:", err.response?.status);
+    console.error("Data:", JSON.stringify(err.response?.data, null, 2));
+    console.error("Mensagem:", err.message);
+    console.error("=========================");
+
+    return null;
   }
 }
 
-module.exports = { gerarResposta, verificarFAQ };
+module.exports = { gerarRespostaClaude };
+
